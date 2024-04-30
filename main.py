@@ -92,6 +92,9 @@ pygame.time.set_timer(BIRD_FLAP_EVT, BIRD_FLAP_FREQ)
 
 pipe_count = 0  # Initialize a counter for pipes at the start of your program
 
+bird_size_multiplier = 1.0
+
+
 
 # Game functions
 def draw_floor():
@@ -117,9 +120,14 @@ def draw_bird(bird):
 
 
 def move_pipes(pipes):
+    global game_score
     for pipe_rect in pipes:
         pipe_rect.centerx -= PIPE_SPEED
+        if pipe_rect.centerx == BIRD_START_X:  # Increment score when the bird aligns with the pipe
+            game_score_sound.play()
+            game_score += 1
     return pipes
+
 
 def draw_pipes(pipes):
     for pipe_rect in pipes:
@@ -137,7 +145,7 @@ def create_pipe():
     pipe_count += 1  # Increment the pipe counter
 
     # Check if it's time to spawn a power-up
-    if pipe_count % 7 == 0:  # Every 7 pipes, spawn a power-up
+    if pipe_count % 4 == 0:  # Every 7 pipes, spawn a power-up
         create_power_up()
 
     return bottom_pipe, upper_pipe
@@ -147,9 +155,11 @@ def check_collisions(pipes):
     for pipe in pipes:
         if bird_rect.colliderect(pipe):
             collision_sound.play()
+            update_highscore()  # Update high score before ending the game
             return False
     if bird_rect.top <= -100 or bird_rect.bottom >= FLOOR_HEIGHT:
         die_sound.play()
+        update_highscore()  # Update high score before ending the game
         return False
     return True
 
@@ -164,24 +174,33 @@ def draw_highscore():
     screen.blit(highscore_surface, highscore_rect)
 
 def reset_game():
-    global bird_speed, game_score, game_active, pipe_rect_list, power_up_active, power_up_timer, power_up_rect, pipe_count, PIPE_SPEED, gravity
+    global bird_speed, game_score, game_active, pipe_rect_list, power_up_active, power_up_timer, power_up_rect, pipe_count, PIPE_SPEED, gravity, bird_flaps, bird_size_multiplier
     bird_speed = BIRD_START_SPEED
     game_score = 0
-    bird_rect.center = (BIRD_START_X, BIRD_START_Y)
     pipe_rect_list.clear()
     power_up_active = None
     power_up_timer = 0
     power_up_rect = None
-    pipe_count = 0  # Reset the pipe counter
-    PIPE_SPEED = 5  # Reset the pipe speed to the initial value
-    gravity = GRAVITY_COEFF  # Reset gravity to its initial value, if it was ever changed
+    pipe_count = 0
+    PIPE_SPEED = 5
+    gravity = GRAVITY_COEFF
     game_active = True
+    bird_size_multiplier = 1.0  # Reset size multiplier
+
+    # Reset bird animation frames to original size
+    for i in range(len(bird_flaps)):
+        bird_flaps[i] = pygame.transform.scale2x(pygame.image.load(f'assets/bluebird-{["downflap", "midflap", "upflap"][i]}.png').convert_alpha())
+    update_bird_surface_and_rect()
+
+
+
 
 
 def update_highscore():
-    global high_score
+    global high_score, game_score
     if game_score > high_score:
         high_score = game_score
+        print("New High Score: ", high_score)  # Debug: Check if this prints when expected
 
 def exit_app():
     pygame.quit()
@@ -211,15 +230,32 @@ def check_power_up_collision():
 
 
 def activate_power_up():
-    global power_up_active, power_up_timer, PIPE_SPEED, gravity, game_score
+    global power_up_active, power_up_timer, PIPE_SPEED, gravity, game_score, bird_flaps, bird_size_multiplier
     power_up_active = power_up_type
-    power_up_timer = pygame.time.get_ticks()  # Start the timer for the power-up effect
+    power_up_timer = pygame.time.get_ticks()
 
-    # Apply immediate effects based on power-up type
-    if power_up_active == 'speed_boost':
-        PIPE_SPEED = 3  # Example: Increase speed temporarily
-    elif power_up_active == 'double_score':
-        game_score *= 2  # Example: Immediate score boost
+    if power_up_active == 'double_score':
+        game_score *= 2  # Double the score
+        bird_size_multiplier += 0.1  # Increase the size by 10%
+
+        # Update all bird animation frames with the new size
+        for i in range(len(bird_flaps)):
+            original_width = bird_flaps[i].get_width()
+            original_height = bird_flaps[i].get_height()
+            new_width = int(original_width * bird_size_multiplier)
+            new_height = int(original_height * bird_size_multiplier)
+            bird_flaps[i] = pygame.transform.scale(bird_flaps[i], (new_width, new_height))
+
+        # Update the current bird surface and rect
+        update_bird_surface_and_rect()
+
+
+def update_bird_surface_and_rect():
+    global bird_surface, bird_rect, bird_flaps, bird_flap_index
+    bird_surface = bird_flaps[bird_flap_index]
+    bird_rect = bird_surface.get_rect(center=(bird_rect.centerx, bird_rect.centery))
+
+
 
 
 def reset_power_up():
